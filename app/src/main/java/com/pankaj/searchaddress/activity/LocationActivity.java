@@ -43,6 +43,8 @@ public class LocationActivity extends BaseActivity implements OnMapReadyCallback
     Location location;
 
 
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
