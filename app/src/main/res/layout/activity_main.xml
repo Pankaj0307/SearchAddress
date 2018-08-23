@@ -9,13 +9,19 @@
     android:weightSum="1"
     tools:context="com.pankaj.searchaddress.activity.MainActivity">
 
-    <ListView
+    <!--<ListView
         android:id="@+id/lv_pickup_points"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="0.9">
 
-    </ListView>
+    </ListView>-->
+    <android.support.v7.widget.RecyclerView
+        android:id="@+id/recycler_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.9"
+        android:scrollbars="vertical" />
 
     <Button
         android:id="@+id/btn_addLocation"
@@ -23,6 +29,7 @@
         android:layout_height="0dp"
         android:layout_gravity="center"
         android:layout_weight="0.1"
+        android:textAllCaps="false"
         android:text="@string/btn_add" />
 
 </LinearLayout>

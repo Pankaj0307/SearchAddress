@@ -1,314 +1,246 @@
 package com.pankaj.searchaddress.network;
 
-import android.annotation.SuppressLint;
-import android.app.Service;
+import android.Manifest;
+import android.app.ProgressDialog;
 import android.content.Context;
-import android.content.Intent;
-import android.location.Address;
-import android.location.Geocoder;
+import android.content.pm.PackageManager;
+import android.content.res.Resources;
+import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
-import android.os.IBinder;
-import android.util.Log;
+import android.os.Handler;
+import android.support.v4.app.ActivityCompat;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
+import com.pankaj.searchaddress.activity.BaseActivity;
+import com.pankaj.searchaddress.mvc.LocationData;
+import com.pankaj.searchaddress.util.Slog;
+import com.pankaj.searchaddress.util.Util;
+
+import java.util.Date;
 
 /**
  * Created by s.pankaj on 11-04-2018.
  */
 
-public class GPSTracker extends Service implements LocationListener {
+public class GPSTracker implements LocationListener {
 
-    // Get Class Name
-    private static String TAG = GPSTracker.class.getName();
+    private Context mContext;
 
-    private final Context mContext;
+    // flag for GPS status
+    private boolean canGetLocation = false;
+    private boolean ProgressStatus = false;
 
-    // flag for GPS Status
-    boolean isGPSEnabled = false;
+    private Location location; // location
+    private double latitude; // latitude
+    private double longitude; // longitude
+    private String gpsTime;
+    private Date date;
+    private ProgressDialog progDailog;
+    private final LocationData locationData;
+    private Handler handler;
+    private Drawable drawable;
+    private Runnable myRunnable;
 
-    // flag for network status
-    boolean isNetworkEnabled = false;
-
-    // flag for GPS Tracking is enabled
-    boolean isGPSTrackingEnabled = false;
-
-    Location location;
-    double latitude;
-    double longitude;
-
-    // How many Geocoder should return our GPSTracker
-    int geocoderMaxResults = 1;
-
-    // The minimum distance to change updates in meters
+    // The minimum distance to change Updates in meters
     private static final long MIN_DISTANCE_CHANGE_FOR_UPDATES = 10; // 10 meters
 
     // The minimum time between updates in milliseconds
-    private static final long MIN_TIME_BW_UPDATES = 1000 * 60 * 1; // 1 minute
+    private static final long MIN_TIME_BW_UPDATES = 1000 * 30; // 1/2 minute
 
-    // Declaring a Location Manager
-    protected LocationManager locationManager;
-
-    // Store LocationManager.GPS_PROVIDER or LocationManager.NETWORK_PROVIDER information
-    private String provider_info;
+    private LocationManager locationManager;
 
     public GPSTracker(Context context) {
         this.mContext = context;
-        getLocation();
+        locationData = LocationData.instance();
+        this.mContext = locationData.getCurrentContext();
+//        findLocation();
+
     }
 
-    /**
-     * Try to get my current location by GPS or Network Provider
-     */
-    @SuppressLint("MissingPermission")
-    public void getLocation() {
+    @SuppressWarnings("SameParameterValue")
+    public GPSTracker(Context context, boolean selectSatus) {
+        this.mContext = context;
+        locationData = LocationData.instance();
+        if (!ProgressStatus && selectSatus) {
+            this.mContext = locationData.getCurrentContext();
+            getLocation(true);
+        }
 
+    }
+
+    private void getLocation(boolean selectSatus) {
         try {
-            locationManager = (LocationManager) mContext.getSystemService(LOCATION_SERVICE);
-
-            //getting GPS status
-            isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-
-            //getting network status
-            isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-
-            // Try to get location if you GPS Service is enabled
-            if (isGPSEnabled) {
-                this.isGPSTrackingEnabled = true;
-
-                Log.d(TAG, "Application use GPS Service");
-
-                /*
-                 * This provider determines location using
-                 * satellites. Depending on conditions, this provider may take a while to return
-                 * a location fix.
-                 */
-
-                provider_info = LocationManager.GPS_PROVIDER;
-
-            } else if (isNetworkEnabled) { // Try to get location if you Network Service is enabled
-                this.isGPSTrackingEnabled = true;
-
-                Log.d(TAG, "Application use Network State to get GPS coordinates");
-
-                /*
-                 * This provider determines location based on
-                 * availability of cell tower and WiFi access points. Results are retrieved
-                 * by means of a network lookup.
-                 */
-                provider_info = LocationManager.NETWORK_PROVIDER;
-
+            if (!ProgressStatus && selectSatus) {
+                Resources resources = locationData.getCurrentContext().getResources();
+                drawable = resources.getDrawable(Util.PROGRESSINDETERMINATE, mContext.getTheme());
+                CreateDailog();
             }
+            new Thread(new Runnable() {
 
-            // Application can use GPS or Network Provider
-            if (!provider_info.isEmpty()) {
-                locationManager.requestLocationUpdates(
-                        provider_info,
-                        MIN_TIME_BW_UPDATES,
-                        MIN_DISTANCE_CHANGE_FOR_UPDATES,
-                        this
-                );
+                @Override
+                public void run() {
+                    if (handler != null) {
+                        if (myRunnable != null)
+                            handler.removeCallbacks(myRunnable);
+                        myRunnable = new Runnable() {
 
-                if (locationManager != null) {
-                    location = locationManager.getLastKnownLocation(provider_info);
-                    updateGPSCoordinates();
+                            @Override
+                            public void run() {
+//                                findLocation();
+                            }
+                        };
+                        runOnUiThreaddelay(myRunnable);
+                    }
+                }
+            }).start();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void findLocation() {
+        locationManager = (LocationManager) mContext
+                .getSystemService(Context.LOCATION_SERVICE);
+
+        // getting GPS status
+        boolean isGPSEnabled = locationManager
+                .isProviderEnabled(LocationManager.GPS_PROVIDER);
+
+        // getting network status
+        boolean isNetworkEnabled = locationManager
+                .isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        if (!isGPSEnabled && !isNetworkEnabled) {
+            // no network provider is enabled
+            if (progDailog != null) {
+                ProgressStatus = false;
+                progDailog.dismiss();
+                progDailog.cancel();
+                progDailog = null;
+                handler = null;
+            }
+        } else {
+            this.canGetLocation = true;
+            long time;
+            if (isGPSEnabled) {
+                if (location == null) {
+                    if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+                    locationManager.requestLocationUpdates(
+                            LocationManager.GPS_PROVIDER, MIN_TIME_BW_UPDATES,
+                            MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
+                    Slog.i(BaseActivity.TAG, "GPS Enabled");
+                    if (locationManager != null) {
+                        location = locationManager
+                                .getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                        if (location != null) {
+                            latitude = location.getLatitude();
+                            longitude = location.getLongitude();
+                            time = location.getTime();
+                            date = new Date(time);
+                        }
+                    }
                 }
             }
-        } catch (Exception e) {
-            //e.printStackTrace();
-            Log.e(TAG, "Impossible to connect to LocationManager", e);
+
+            if (location == null) {
+                if (isNetworkEnabled && latitude <= 0.0) {
+                    locationManager.requestLocationUpdates(
+                            LocationManager.NETWORK_PROVIDER,
+                            MIN_TIME_BW_UPDATES,
+                            MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
+                    Slog.i(BaseActivity.TAG, "Network Available for GPS from Network Provider");
+                    if (locationManager != null) {
+                        location = locationManager
+                                .getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                        if (location != null) {
+                            latitude = location.getLatitude();
+                            longitude = location.getLongitude();
+                            time = location.getTime();
+                            date = new Date(time);
+                        }
+                    }
+                }
+            }
+
+            if (location == null) {
+                if (progDailog != null) {
+                    progDailog.incrementProgressBy(100);
+                }
+                getLocation(false);
+
+            } else {
+                if (progDailog != null) {
+                    ProgressStatus = false;
+                    progDailog.dismiss();
+                    handler = null;
+                    progDailog = null;
+
+                }
+            }
+        }
+    }
+
+    private void CreateDailog() {
+        ProgressStatus = true;
+        handler = new Handler(locationData.getCurrentContext().getMainLooper());
+        progDailog = new ProgressDialog(locationData.getCurrentContext());
+        progDailog.setMessage("Searching for GPS...");
+        progDailog.setIndeterminate(true);
+        progDailog.setIndeterminateDrawable(drawable);
+        progDailog.setCancelable(false);
+        progDailog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        //progDailog.show();
+    }
+
+    private void runOnUiThreaddelay(Runnable runnable) {
+        handler.postDelayed(runnable, 0);
+    }
+
+    private void stopUsingGPS() {
+        if (locationManager != null) {
+            locationManager.removeUpdates(GPSTracker.this);
+            locationManager = null;
         }
     }
 
     /**
-     * Update GPSTracker latitude and longitude
-     */
-    public void updateGPSCoordinates() {
-        if (location != null) {
-            latitude = location.getLatitude();
-            longitude = location.getLongitude();
-        }
-    }
-
-    /**
-     * GPSTracker latitude getter and setter
-     *
-     * @return latitude
+     * Function to get latitude
      */
     public double getLatitude() {
         if (location != null) {
             latitude = location.getLatitude();
         }
-
         return latitude;
     }
 
     /**
-     * GPSTracker longitude getter and setter
-     *
-     * @return
+     * Function to get longitude
      */
     public double getLongitude() {
         if (location != null) {
             longitude = location.getLongitude();
         }
-
         return longitude;
     }
 
-    /**
-     * GPSTracker isGPSTrackingEnabled getter.
-     * Check GPS/wifi is enabled
-     */
-    public boolean getIsGPSTrackingEnabled() {
-
-        return this.isGPSTrackingEnabled;
-    }
-
-    /**
-     * Stop using GPS listener
-     * Calling this method will stop using GPS in your app
-     */
-    public void stopUsingGPS() {
-        if (locationManager != null) {
-            locationManager.removeUpdates(GPSTracker.this);
-        }
-    }
-
-    /**
-     * Function to show settings alert dialog
-     */
-    /*public void showSettingsAlert() {
-        AlertDialog.Builder alertDialog = new AlertDialog.Builder(mContext);
-
-        //Setting Dialog Title
-        alertDialog.setTitle(R.string.GPSAlertDialogTitle);
-
-        //Setting Dialog Message
-        alertDialog.setMessage(R.string.GPSAlertDialogMessage);
-
-        //On Pressing Setting button
-        alertDialog.setPositiveButton(R.string.action_settings, new DialogInterface.OnClickListener() {
-
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                mContext.startActivity(intent);
-            }
-        });
-
-        //On pressing cancel button
-        alertDialog.setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                dialog.cancel();
-            }
-        });
-
-        alertDialog.show();
-    }
-*/
-    /**
-     * Get list of address by latitude and longitude
-     *
-     * @return null or List<Address>
-     */
-    public List<Address> getGeocoderAddress(Context context) {
+    public String getTime() {
         if (location != null) {
-
-            Geocoder geocoder = new Geocoder(context, Locale.ENGLISH);
-
-            try {
-                /**
-                 * Geocoder.getFromLocation - Returns an array of Addresses
-                 * that are known to describe the area immediately surrounding the given latitude and longitude.
-                 */
-                List<Address> addresses = geocoder.getFromLocation(latitude, longitude, this.geocoderMaxResults);
-
-                return addresses;
-            } catch (IOException e) {
-                //e.printStackTrace();
-                Log.e(TAG, "Impossible to connect to Geocoder", e);
-            }
+            date = new Date(location.getTime());
         }
-
-        return null;
+        return gpsTime;
     }
 
     /**
-     * Try to get AddressLine
+     * Function to check GPS/wifi enabled
      *
-     * @return null or addressLine
+     * @return boolean
      */
-    public String getAddressLine(Context context) {
-        List<Address> addresses = getGeocoderAddress(context);
-
-        if (addresses != null && addresses.size() > 0) {
-            Address address = addresses.get(0);
-            String addressLine = address.getAddressLine(0);
-
-            return addressLine;
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Try to get Locality
-     *
-     * @return null or locality
-     */
-    public String getLocality(Context context) {
-        List<Address> addresses = getGeocoderAddress(context);
-
-        if (addresses != null && addresses.size() > 0) {
-            Address address = addresses.get(0);
-            String locality = address.getLocality();
-
-            return locality;
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Try to get Postal Code
-     *
-     * @return null or postalCode
-     */
-    public String getPostalCode(Context context) {
-        List<Address> addresses = getGeocoderAddress(context);
-
-        if (addresses != null && addresses.size() > 0) {
-            Address address = addresses.get(0);
-            String postalCode = address.getPostalCode();
-
-            return postalCode;
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Try to get CountryName
-     *
-     * @return null or postalCode
-     */
-    public String getCountryName(Context context) {
-        List<Address> addresses = getGeocoderAddress(context);
-        if (addresses != null && addresses.size() > 0) {
-            Address address = addresses.get(0);
-            String countryName = address.getCountryName();
-
-            return countryName;
-        } else {
-            return null;
-        }
+    public boolean canGetLocation() {
+        return this.canGetLocation;
     }
 
     @Override
@@ -316,19 +248,43 @@ public class GPSTracker extends Service implements LocationListener {
     }
 
     @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
+    public void onProviderDisabled(String provider) {
+        Slog.i(BaseActivity.TAG, "GPS TRACKER Disabled");
+        this.mContext = locationData.getCurrentContext();
+        if (progDailog != null) {
+            progDailog.dismiss();
+            progDailog.cancel();
+        }
+        progDailog = null;
+        if (handler != null)
+            if (myRunnable != null)
+                handler.removeCallbacks(myRunnable);
+        myRunnable = null;
+        handler = null;
     }
 
     @Override
     public void onProviderEnabled(String provider) {
+        Slog.i(BaseActivity.TAG, "GPS TRACKER Enabled");
+        if (!ProgressStatus && handler == null) {
+            ProgressStatus = true;
+
+            if (progDailog != null) {
+                progDailog.dismiss();
+                progDailog.cancel();
+            }
+
+            handler = null;
+            progDailog = null;
+            stopUsingGPS();
+
+            new GPSTracker(locationData.getCurrentContext(), true);
+        }
     }
 
     @Override
-    public void onProviderDisabled(String provider) {
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+        Slog.i(BaseActivity.TAG, "GPS TRACKER StatusChanged");
+        this.mContext = locationData.getCurrentContext();
     }
 }

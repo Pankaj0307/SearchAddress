@@ -27,8 +27,6 @@ public abstract class BaseActivity extends AppCompatActivity {
     public FrameLayout lnr_content;
     public Toolbar toolbar;
     public TextView toolbar_title;
-    public Button btn_back;
-    public ImageView iv_toolbar_icon;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,8 +40,6 @@ public abstract class BaseActivity extends AppCompatActivity {
         lnr_content = (FrameLayout) findViewById(R.id.lnr_content);
         toolbar = (Toolbar) findViewById(R.id.toolbar);
         toolbar_title = (TextView) findViewById(R.id.toolbar_title);
-        btn_back = (Button) findViewById(R.id.btn_back);
-        iv_toolbar_icon = (ImageView) findViewById(R.id.iv_toolbar_icon);
     }
 
     public abstract void setContentLayout(int layout);

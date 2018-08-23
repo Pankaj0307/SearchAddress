@@ -18,6 +18,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import static com.pankaj.searchaddress.activity.BaseActivity.TAG;
 
@@ -76,6 +78,7 @@ public class DBHelper {
             try {
                 db.execSQL(CREATE_TABLE_PICK_UP_POINTS);
                 db.setTransactionSuccessful();
+
 
                 Slog.i(TAG, "--- " + DBHelper.class.getSimpleName() + " Tables Created");
             } catch (Exception ex) {
@@ -162,6 +165,25 @@ public class DBHelper {
         myInput.close();
     }
 
+    public void insertLocationDetails(List<LocationData> locationData) {
+        try {
+            for (int i = 0; i < locationData.size(); i++) {
+                ContentValues values = new ContentValues();
+                values.put("locationName", locationData.get(i).locationName);
+                values.put("locationAddress", locationData.get(i).locationAddress);
+                values.put("latitude", locationData.get(i).latitude);
+                values.put("longitude", locationData.get(i).longitude);
+
+                Log.i("---------Insert-----", ":");
+                mDataBase.insert(TABLE_PICK_UP_POINTS, null, values);
+            }
+            Util.BackupDatabase();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public void insertLocationDetails(LocationData locationData) {
         try {
             ContentValues values = new ContentValues();
@@ -172,7 +194,6 @@ public class DBHelper {
 
             Log.i("---------Insert-----", ":");
             mDataBase.insert(TABLE_PICK_UP_POINTS, null, values);
-
             Util.BackupDatabase();
 
         } catch (Exception e) {
@@ -180,17 +201,36 @@ public class DBHelper {
         }
     }
 
-    public boolean isExists(String Table_Name, String where_condition) {
+    public ArrayList<LocationData> getAllLocationData() {
+        mDataBase.beginTransaction();
+        String query = "Select * from " + TABLE_PICK_UP_POINTS;
+        ArrayList<LocationData> locationDataArrayList = new ArrayList<>();
+        Cursor cursor = mDataBase.rawQuery(query, null);
+        StringBuffer stringBuffer = new StringBuffer();
+        LocationData locationData = null;
 
-        try {
-            Cursor c = mDataBase.rawQuery("Select * from " + Table_Name + " " + where_condition, null);
-            if (c.moveToFirst()) {
-                return true;
-            }
-            c.close();
-        } catch (Exception e) {
+        while (cursor.moveToNext()) {
+            locationData = new LocationData();
 
+            int id = cursor.getInt(cursor.getColumnIndex("ID"));
+            String locationName = cursor.getString(cursor.getColumnIndex("locationName"));
+            Double latitude = cursor.getDouble(cursor.getColumnIndex("latitude"));
+            Double longitude = cursor.getDouble(cursor.getColumnIndex("longitude"));
+            String locationAddress = cursor.getString(cursor.getColumnIndex("locationAddress"));
+
+
+            locationData.locationId = id;
+            locationData.locationName = locationName;
+            locationData.latitude = latitude;
+            locationData.longitude = longitude;
+            locationData.locationAddress = locationAddress;
+
+
+            stringBuffer.append(locationData);
+            locationDataArrayList.add(locationData);
         }
-        return false;
+
+        mDataBase.endTransaction();
+        return locationDataArrayList;
     }
 }
